@@ -11,19 +11,21 @@ puts 'starting...'
 system('date')
 
 chrs = Array.new(25) { |i| i+1}
+# chrs = Array.new(0)
 chrs << "MT"
 
 chrs.each do |chr|
   
   chrf = Bio::FastaFormat.open(CHR_FILE.gsub(/!/, chr.to_s))
-  chrf_out = File.open("chr#{chr}_compressed.fasta", "w+")  
+  chrf_out = File.open("zfin_chr#{chr}_compressed.fasta", "w+")  
   seq =  chrf.next_entry.seq
   ubound = seq.length - 1 # upper bound to reverse position for frames 4 5 6
 
   map = File.open(MAP_FILE)
-  
+  last_start = 0
+  last_stop = 0
   map.each do |line|
-    
+   
     next if line =~ /^#/
     #now split line into our array
     
@@ -31,7 +33,14 @@ chrs.each do |chr|
     
     c = la[1].strip
     if c.eql?(chr.to_s)
-      
+      if (la[2].to_i == last_start) && (la[3].to_i == last_stop)
+        puts "Removed Duplicate."
+        next
+      else
+        last_start = la[2].to_i
+        last_stop = la[3].to_i
+      end
+
       subseq = seq[(la[2].to_i-1)...(la[3].to_i-1)]
       chrom = Bio::Sequence::NA.new(subseq.strip)
       
@@ -43,14 +52,13 @@ chrs.each do |chr|
        
         offset = 0
         until (i = chrom_trans.index('*', offset)).nil?
-          start_pos = ((la[2].to_i-1)*3)+(i*3)+frame
-          stop_pos = start_pos+2 # add 2 so it includes the last two NA spots
-          if frame > 3
-            #switch positions if on a reversed frame
-            start_pos = ubound - start_pos
-            stop_pos = ubound - stop_pos
+          if frame < 4 #fwd
+            start_pos = ((la[2].to_i))+(i*3)+frame-1
+            stop_pos = start_pos+2 # add 2 so it includes the last two NA spots
+          else #rev compliment
+            start_pos = (la[3].to_i)-(i*3)-frame+4
+            stop_pos = start_pos-2
           end
-          
           index_str += "'#{start_pos}:#{stop_pos}',"
           offset = i+1
           
